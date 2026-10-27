@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#163b2b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rozvoz a svozy">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<title>Rozvoz – denní plán a Google Mapy</title>
+<style>
+:root{color-scheme:light;--green:#163b2b;--line:#e1e6e2;--muted:#647067;--bg:#f4f7f4}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17221b}
+header{background:var(--green);color:white;padding:22px 16px 18px;position:sticky;top:0;z-index:3}
+h1{font-size:23px;margin:0 0 5px}header p{margin:0;font-size:13px;opacity:.88}
+main{max-width:720px;margin:auto;padding:14px}
+.summary,.city-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.summarytop{display:flex;justify-content:space-between;align-items:center;font-weight:700}
+.track{height:7px;background:#e6ebe7;border-radius:20px;overflow:hidden;margin:11px 0}
+#bar{height:100%;width:0;background:var(--green);transition:width .15s}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+select,button{font:inherit;border-radius:10px;padding:11px;border:1px solid #cbd5ce;background:white;color:#17221b}
+select{width:100%;margin:12px 0 0}
+button{cursor:pointer}button.primary{background:var(--green);color:white;border-color:var(--green)}
+.city-title{font-size:18px;font-weight:750;margin:2px 0 10px}
+.stop{display:grid;grid-template-columns:92px 1fr 34px;gap:9px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.checkgroup{display:flex;flex-direction:column;gap:8px;font-size:11px;color:var(--muted);align-items:flex-start}
+.checkline{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.today-check{width:20px;height:20px;accent-color:#1768bd}
+.today-active{background:#eef5ff;border-radius:10px;padding-left:8px;padding-right:8px}
+.todaybar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.todaybar label{display:flex;gap:8px;align-items:center;font-size:14px}
+.todaybar input{width:20px;height:20px;accent-color:var(--green)}
+.small{font-size:12px;color:var(--muted)}
+.stop:first-of-type{border-top:0}
+.check{width:24px;height:24px;accent-color:var(--green)}
+.address{font-weight:650;line-height:1.3}
+.note{font-size:12px;color:var(--muted);margin-top:4px}
+.nav{display:inline-block;color:#1768bd;text-decoration:none;font-size:13px;font-weight:650;margin-top:6px}
+.arrows{display:flex;flex-direction:column;gap:3px}.arrows button{padding:4px 0;border:0;background:#f0f4f1;font-size:16px}
+.done .address{color:#78827b;text-decoration:line-through}
+.footer{font-size:12px;color:var(--muted);line-height:1.45;padding:4px 3px 24px}
+
+.svoz-panel{background:#fff;border:1px solid #d5deea;border-radius:16px;padding:14px;margin:14px 0 22px;box-shadow:0 2px 8px #102a430b;color:#172033}
+.svoz-panel h2{margin:0 0 8px;font-size:21px}.svoz-panel p{line-height:1.45}
+.svoz-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.svoz-btn{border:0;border-radius:9px;background:#17365d;color:#fff;font-weight:700;padding:11px 14px;font-size:15px}
+.svoz-btn.secondary{background:#e5edf7;color:#17365d}.svoz-note{font-size:13px;color:#536174}
+.svoz-status{font-size:13px;color:#237245;min-height:18px}.svoz-tablewrap{overflow-x:auto}
+.svoz-table{border-collapse:collapse;width:100%;min-width:760px}.svoz-table th,.svoz-table td{border:1px solid #bdc9d8;padding:8px;text-align:center}
+.svoz-table th{background:#e9eff7;font-size:13px}.svoz-table td.svoz-date{text-align:left;font-weight:700;white-space:nowrap}
+.svoz-table input[type=number]{width:72px;max-width:100%;font-size:17px;padding:8px 4px;text-align:center;border:1px solid #aab8ca;border-radius:6px;background:#fff}
+.svoz-table .svoz-total{font-size:18px;font-weight:800;background:#f0f6ff}.svoz-table .svoz-money{font-weight:800;color:#805500}
+.svoz-table tr.svoz-sunday{background:#fff8e7}.svoz-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px}
+.svoz-summary>div{background:#f0f6ff;border:1px solid #cbdcf2;border-radius:10px;padding:12px}
+.svoz-summary span{display:block;color:#536174;font-size:12px}.svoz-summary strong{font-size:23px}
+@media(max-width:540px){.svoz-panel{padding:9px}.svoz-summary{grid-template-columns:1fr}}
+@media print{.svoz-actions,.svoz-note,.svoz-status{display:none!important}.svoz-table{min-width:0;font-size:11px}.svoz-table th,.svoz-table td{padding:5px}.svoz-panel{break-inside:avoid}}
+
+
+.import-panel{display:none;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin:0 0 12px}
+.import-panel.open{display:block}.import-panel h2{font-size:18px;margin:0 0 8px}
+.import-panel p{font-size:13px;color:var(--muted);line-height:1.4}
+.import-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.import-actions button{flex:1 1 145px}
+.import-panel textarea{width:100%;min-height:140px;border:1px solid #cbd5ce;border-radius:10px;padding:11px;font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.import-status{font-size:13px;white-space:pre-wrap;color:var(--muted);margin:8px 0}#qr-reader{width:100%;max-width:420px;margin:10px auto}
+
+</style>
+</head>
+<body>
+<header><h1>🚚 Rozvoz – Google Mapy</h1><p>Zastávky · přidávání adres · fajfky · Google Mapy</p></header>
+<main>
+<section class="summary">
+ <div class="summarytop"><span>Odjeto</span><span id="count">0 / 31</span></div>
+ <div class="track"><div id="bar"></div></div>
+ <div class="controls">
+  <button id="add" class="primary">＋ Přidat adresu</button>
+  <button id="copy">Kopírovat seznam</button>
+  <button id="reset">Vynulovat odjeté</button>
+  <button id="resetToday">Vynulovat dnešní trasu</button>
+ </div>
+ <div class="todaybar"><label><input type="checkbox" id="onlyToday"> Zobrazit jen vybrané na dnešek</label><span class="small" id="todayCount">Dnes vybráno: 0</span></div>
+ <select id="city"><option>Všechna města</option></select>
+</section>
+
+<section class="summary" id="backupPanel">
+ <div class="summarytop"><span>💾 Záloha dat</span></div>
+ <p class="small">Ulož si adresy, fajfky a evidenci svozů do souboru. Zálohu si můžeš později obnovit.</p>
+ <div class="controls">
+  <button type="button" id="exportBackup">Stáhnout zálohu</button>
+  <button type="button" id="importBackupButton">Obnovit ze zálohy</button>
+ </div>
+ <input type="file" id="importBackupFile" accept="application/json,.json" hidden>
+ <div class="small" id="backupStatus" role="status" aria-live="polite"></div>
+</section>
+
+<section class="import-panel" id="importPanel">
+ <h2>➕ Přidat adresu – foto / galerie / QR</h2>
+ <p>Vyfoť seznam, vyber fotku z galerie nebo načti QR kód. Rozpoznaný text si zkontroluj před přidáním.</p>
+ <div class="import-actions">
+  <button type="button" id="takePhoto">📷 Vyfotit adresy</button>
+  <button type="button" id="choosePhoto">🖼️ Vybrat z galerie</button>
+  <button type="button" id="scanQr">▦ Načíst QR kód</button>
+ </div>
+ <input id="cameraImage" type="file" accept="image/*" capture="environment" hidden>
+ <input id="galleryImage" type="file" accept="image/*" hidden>
+ <div id="qr-reader" hidden></div>
+ <div id="importStatus" class="import-status">Každou adresu napiš na samostatný řádek ve tvaru Město – ulice a číslo.</div>
+ <textarea id="recognizedAddresses" placeholder="Např. Jaroměř – Ivanovova 86"></textarea>
+ <div class="import-actions"><button type="button" class="primary" id="saveRecognized">Přidat do rozvozu</button><button type="button" id="closeImporter">Zavřít načítání</button></div>
+</section>
+
+<div id="list">
+<section class="city-card"><div class="city-title">Jaroměř</div>
+<div class="stop" data-stop="1"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">1. Jaroměř – Ivanovova 86</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Ivanovova%2086%2C%20Jarom%C4%9B%C5%99%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="2"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">2. Jaroměř – Hradecká 159</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Hradeck%C3%A1%20159%2C%20Jarom%C4%9B%C5%99%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="3"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">3. Jaroměř – Knappova 162</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Knappova%20162%2C%20Jarom%C4%9B%C5%99%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="4"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">4. Jaroměř – Husova 69</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Husova%2069%2C%20Jarom%C4%9B%C5%99%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="5"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">5. Jaroměř – Růžová 453</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=R%C5%AF%C5%BEov%C3%A1%20453%2C%20Jarom%C4%9B%C5%99%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+</section>
+<section class="city-card"><div class="city-title">Trutnov</div>
+<div class="stop" data-stop="6"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">6. Trutnov – Oválná 134</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Ov%C3%A1ln%C3%A1%20134%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="7"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">7. Trutnov – Prokopa Holého 466</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Prokopa%20Hol%C3%A9ho%20466%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="8"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">8. Trutnov – J. R. z Dubé 561</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=J.%20R.%20z%20Dub%C3%A9%20561%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="9"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">9. Trutnov – Palackého 256</div>
+<div class="note">GLS Parcel Box</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Palack%C3%A9ho%20256%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="10"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">10. Trutnov – Palackého 201</div>
+<div class="note">AlzaBox, poliklinika</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Palack%C3%A9ho%20201%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="11"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">11. Trutnov – Na Struze 30</div>
+<div class="note">GLS Parcel Box</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Na%20Struze%2030%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="12"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">12. Trutnov – Maxima Gorkého 422</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Maxima%20Gork%C3%A9ho%20422%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="13"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">13. Trutnov – Polská 96</div>
+<div class="note">AlzaBox, Penzion Kuželna</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Polsk%C3%A1%2096%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="14"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">14. Trutnov – Lipové náměstí 226</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Lipov%C3%A9%20n%C3%A1m%C4%9Bst%C3%AD%20226%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="15"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">15. Trutnov – Náměstí Hraničářů 823</div>
+<div class="note">GLS Parcel Box</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=N%C3%A1m%C4%9Bst%C3%AD%20Hrani%C4%8D%C3%A1%C5%99%C5%AF%20823%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="16"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">16. Trutnov – Československé armády 906</div>
+<div class="note">GLS Parcel Box</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=%C4%8Ceskoslovensk%C3%A9%20arm%C3%A1dy%20906%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="17"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">17. Trutnov – Horská 813</div>
+<div class="note">GLS Parcel Box</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Horsk%C3%A1%20813%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="18"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">18. Trutnov – Horská 668</div>
+<div class="note">GLS Parcel Box</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Horsk%C3%A1%20668%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="19"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">19. Trutnov – Obchodní 135</div>
+<div class="note">GLS Parcel Box</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Obchodn%C3%AD%20135%2C%20Trutnov%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+</section>
+<section class="city-card"><div class="city-title">Mladé Buky</div>
+<div class="stop" data-stop="20"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">20. Mladé Buky – Mladé Buky 156</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Mlad%C3%A9%20Buky%20156%2C%20Mlad%C3%A9%20Buky%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+</section>
+<section class="city-card"><div class="city-title">Svoboda nad Úpou</div>
+<div class="stop" data-stop="21"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">21. Svoboda nad Úpou – Úpská</div>
+<div class="note">Čerpací stanice – ověřit</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=%C3%9Apsk%C3%A1%2C%20Svoboda%20nad%20%C3%9Apou%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+</section>
+<section class="city-card"><div class="city-title">Rudník</div>
+<div class="stop" data-stop="22"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">22. Rudník – Rudník 340</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Rudn%C3%ADk%20340%2C%20Rudn%C3%ADk%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+</section>
+<section class="city-card"><div class="city-title">Hostinné</div>
+<div class="stop" data-stop="23"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">23. Hostinné – Sídliště 741</div>
+<div class="note">GLS Parcel Box</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=S%C3%ADdli%C5%A1t%C4%9B%20741%2C%20Hostinn%C3%A9%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+</section>
+<section class="city-card"><div class="city-title">Dvůr Králové nad Labem</div>
+<div class="stop" data-stop="24"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">24. Dvůr Králové nad Labem – Tyršova 634</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Tyr%C5%A1ova%20634%2C%20Dv%C5%AFr%20Kr%C3%A1lov%C3%A9%20nad%20Labem%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="25"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">25. Dvůr Králové nad Labem – Erbenova 2928</div>
+<div class="note">GLS Parcel Box</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Erbenova%202928%2C%20Dv%C5%AFr%20Kr%C3%A1lov%C3%A9%20nad%20Labem%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="26"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">26. Dvůr Králové nad Labem – Alešova 3083</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Ale%C5%A1ova%203083%2C%20Dv%C5%AFr%20Kr%C3%A1lov%C3%A9%20nad%20Labem%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="27"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">27. Dvůr Králové nad Labem – 1. Benešovo nábřeží 2913 544 01</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=1.%20Bene%C5%A1ovo%20n%C3%A1b%C5%99e%C5%BE%C3%AD%202913%20544%2001%2C%20Dv%C5%AFr%20Kr%C3%A1lov%C3%A9%20nad%20Labem%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+</section>
+<section class="city-card"><div class="city-title">Hořice</div>
+<div class="stop" data-stop="28"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">28. Hořice – Škrroupova</div>
+<div class="note">Vedle Jednoty, GLS Parcel Box</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=%C5%A0krroupova%2C%20Ho%C5%99ice%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+<div class="stop" data-stop="29"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">29. Hořice – Antonína Rudla 1029/24</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=Anton%C3%ADna%20Rudla%201029/24%2C%20Ho%C5%99ice%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+</section>
+<section class="city-card"><div class="city-title">Ostroměř</div>
+<div class="stop" data-stop="30"><input type="checkbox" class="check" aria-label="Označit jako odjeto"><div><div class="address">30. Ostroměř – T. G. Masaryka 288</div>
+<div class="note">GLS Parcel Box</div>
+<a class="nav" href="https://www.google.com/maps/dir/?api=1&destination=T.%20G.%20Masaryka%20288%2C%20Ostrom%C4%9B%C5%99%2C%20%C4%8Cesk%C3%A1%20republika&travelmode=driving" target="_blank" rel="noopener">↗ Navigovat v Google Mapách</a></div><div class="arrows"><button type="button" aria-label="Posunout výš">▲</button><button type="button" aria-label="Posunout níž">▼</button></div></div>
+</section>
+</div>
+<p class="footer">Modrá fajfka = zastávka vybraná na dnešní rozvoz. Zelená fajfka = zastávka už odjetá. Výběr dnešních zastávek, odškrtnutí i pořadí se ukládají v tomto prohlížeči na telefonu. Navigace se otevírá v Google Mapách. Adresu Úpská ve Svobodě nad Úpou je potřeba ověřit.</p>
+
+<section class="svoz-panel" id="svozyPanel">
+ <h2>📦 Evidence svozů – TraSa 64</h2>
+ <p><b>Řidič:</b> Čeřovský · <b>Období:</b> 26. října – 1. listopadu 2026</p>
+ <div class="svoz-actions">
+  <button type="button" class="svoz-btn" id="svozSave">Uložit svozy</button>
+  <button type="button" class="svoz-btn secondary" id="svozPrint">Tisknout / uložit PDF</button>
+  <button type="button" class="svoz-btn secondary" id="svozReset">Vymazat záznamy</button>
+ </div>
+ <p class="svoz-note">Zadej cenu za jeden balík. Denní výdělek se počítá automaticky podle počtu balíků a cena za balík. Týdenní součty se zobrazí dole. V neděli se zapisuje zvlášť cena svozu.</p>
+ <div class="svoz-actions"><label style="display:flex;align-items:center;gap:8px;font-weight:700">Cena za balík (Kč): <input id="svozPricePerPackage" type="number" min="0" step="0.01" inputmode="decimal" value="2" style="width:110px;font:inherit;padding:9px;border:1px solid #cbd5ce;border-radius:9px"></label></div>
+ <div class="svoz-status" id="svozStatus" aria-live="polite"></div>
+ <div class="svoz-tablewrap"><table class="svoz-table">
+  <thead><tr><th>Datum</th><th>Karel Co.</th><th>LPG Směřice</th><th>Karel S.</th><th>Polštáře Černožice</th><th>Balíky celkem</th><th>Balíky / Kč</th><th>Svoz / Kč</th></tr></thead>
+  <tbody id="svozRows"></tbody>
+  <tfoot><tr><th colspan="5">CELKEM ZA TÝDEN</th><td class="svoz-total" id="svozWeekTotal">0</td><td class="svoz-money" id="svozPackageMoneyTotal">0 Kč</td><td class="svoz-money" id="svozMoneyTotal">0 Kč</td></tr></tfoot>
+ </table></div>
+ <div class="svoz-summary">
+  <div><span>Balíky za týden</span><strong id="svozSummaryPackages">0</strong></div>
+  <div><span>Výdělek za balíky</span><strong id="svozSummaryPackageMoney">0 Kč</strong></div>
+  <div><span>Nedělní svoz</span><strong id="svozSummaryMoney">0 Kč</strong></div>
+  <div><span>Celkem Kč včetně svozu</span><strong id="svozGrandTotal">0 Kč</strong></div>
+  <div><span>Řidič / trasa</span><strong>Čeřovský · 64</strong></div>
+ </div>
+</section>
+</main>
+<script>
+const initial=[
+[1,"Jaroměř","Ivanovova 86"],[2,"Jaroměř","Hradecká 159"],[3,"Jaroměř","Knappova 162"],[4,"Jaroměř","Husova 69"],[5,"Jaroměř","Růžová 453"],
+[6,"Trutnov","Oválná 134"],[7,"Trutnov","Prokopa Holého 466"],[8,"Trutnov","J. R. z Dubé 561"],[9,"Trutnov","Palackého 256","GLS Parcel Box"],[10,"Trutnov","Palackého 201","AlzaBox, poliklinika"],[11,"Trutnov","Na Struze 30","GLS Parcel Box"],[12,"Trutnov","Maxima Gorkého 422"],[13,"Trutnov","Polská 96","AlzaBox, Penzion Kuželna"],[14,"Trutnov","Lipové náměstí 226"],[15,"Trutnov","Náměstí Hraničářů 823","GLS Parcel Box"],[16,"Trutnov","Československé armády 906","GLS Parcel Box"],[17,"Trutnov","Horská 813","GLS Parcel Box"],[18,"Trutnov","Horská 668","GLS Parcel Box"],[19,"Trutnov","Obchodní 135","GLS Parcel Box"],
+[20,"Mladé Buky","Mladé Buky 156"],[21,"Svoboda nad Úpou","Úpská","Čerpací stanice – ověřit"],[22,"Rudník","Rudník 340"],[23,"Hostinné","Sídliště 741","GLS Parcel Box"],[24,"Dvůr Králové nad Labem","Tyršova 634"],[25,"Dvůr Králové nad Labem","Erbenova 2928","GLS Parcel Box"],[26,"Dvůr Králové nad Labem","Alešova 3083"],[27,"Dvůr Králové nad Labem","1. Benešovo nábřeží 2913 544 01"],[28,"Dvůr Králové nad Labem","Elišky Krásnohorské 2429"],[29,"Hořice","Škrroupova","Vedle Jednoty, GLS Parcel Box"],[30,"Hořice","Antonína Rudla 1029/24"],[31,"Ostroměř","T. G. Masaryka 288","GLS Parcel Box"]
+].map(x=>({n:x[0],city:x[1],address:x[2],note:x[3]||""}));
+const CHECK="rozvoz30_checked_v2", ORDER="rozvoz30_order_v2";
+const CUSTOM="rozvoz30_custom_v1";
+const TODAY="rozvoz30_today_v1";
+let today=new Set(JSON.parse(localStorage.getItem(TODAY)||"[]"));
+let checked=new Set(JSON.parse(localStorage.getItem(CHECK)||"[]"));
+const custom=JSON.parse(localStorage.getItem(CUSTOM)||"[]");
+let stops=JSON.parse(localStorage.getItem(ORDER)||"null")||[...initial,...custom];
+// Doplní novou výchozí zastávku i do dříve uloženého seznamu a sjednotí číslování.
+for(const base of initial){if(!stops.some(s=>s.city===base.city&&s.address===base.address)){stops.push({...base});}}
+sortAndRenumber();
+const citySelect=document.getElementById("city");
+[...new Set(initial.map(s=>s.city))].forEach(c=>{let o=document.createElement("option");o.value=c;o.textContent=c;citySelect.append(o)});
+function save(){
+ localStorage.setItem(CHECK,JSON.stringify([...checked]));
+ localStorage.setItem(ORDER,JSON.stringify(stops));
+ localStorage.setItem(CUSTOM,JSON.stringify(stops.filter(s=>s.custom)));
+ localStorage.setItem(TODAY,JSON.stringify([...today]));
+}
+function sortAndRenumber(){
+ const preferred=[...new Set(initial.map(s=>s.city))];
+ const extra=[...new Set(stops.map(s=>s.city).filter(c=>!preferred.includes(c)))].sort((a,b)=>a.localeCompare(b,'cs'));
+ const cityOrder=[...preferred,...extra];
+ stops.sort((a,b)=>cityOrder.indexOf(a.city)-cityOrder.indexOf(b.city));
+ stops.forEach((s,i)=>s.n=i+1);
+}
+function addAddress(){
+ const city=prompt("Zadej město nebo obec:");
+ if(!city || !city.trim()) return;
+ const address=prompt("Zadej ulici a číslo popisné:");
+ if(!address || !address.trim()) return;
+ const note=prompt("Poznámka (např. GLS Parcel Box). Pokud není, nech prázdné:")||"";
+ const n=stops.reduce((m,s)=>Math.max(m,s.n),0)+1;
+ const stop={n,city:city.trim(),address:address.trim(),note:note.trim(),custom:true};
+ stops.push(stop);
+ sortAndRenumber();
+ if(![...citySelect.options].some(o=>o.value===stop.city)){
+  const o=document.createElement("option");o.value=stop.city;o.textContent=stop.city;citySelect.append(o);
+ }
+ citySelect.value="Všechna města";
+ save();render();
+}
+function render(){
+ const city=citySelect.value, list=document.getElementById("list");list.innerHTML="";
+ const done=checked.size,total=stops.length;
+ document.getElementById("count").textContent=`${done} / ${total}`;
+ document.getElementById("bar").style.width=(total?done/total*100:0)+"%";
+ document.getElementById("todayCount").textContent=`Dnes vybráno: ${today.size}`;
+ const onlyToday=document.getElementById("onlyToday").checked;
+ const visibleStops=stops.filter(s=>(!onlyToday||today.has(s.n))&&(city==="Všechna města"||s.city===city));
+ const cities=[...new Set(visibleStops.map(s=>s.city))];
+ cities.forEach(c=>{
+  const card=document.createElement("section");card.className="city-card";
+  const title=document.createElement("div");title.className="city-title";title.textContent=c;card.append(title);
+  visibleStops.filter(s=>s.city===c).forEach(s=>{
+   const row=document.createElement("div");row.className="stop"+(checked.has(s.n)?" done":"")+(today.has(s.n)?" today-active":"");
+   const checks=document.createElement("div");checks.className="checkgroup";
+   const todayLine=document.createElement("label");todayLine.className="checkline";
+   const todayCb=document.createElement("input");todayCb.type="checkbox";todayCb.className="today-check";todayCb.checked=today.has(s.n);todayCb.setAttribute("aria-label","Vybrat na dnešní rozvoz");
+   todayCb.onchange=()=>{todayCb.checked?today.add(s.n):today.delete(s.n);save();render()};
+   todayLine.append(todayCb,document.createTextNode("Dnes"));
+   const doneLine=document.createElement("label");doneLine.className="checkline";
+   const cb=document.createElement("input");cb.type="checkbox";cb.className="check";cb.checked=checked.has(s.n);cb.setAttribute("aria-label","Označit jako odjeto");
+   cb.onchange=()=>{cb.checked?checked.add(s.n):checked.delete(s.n);save();render()};
+   doneLine.append(cb,document.createTextNode("Odjeto"));checks.append(todayLine,doneLine);
+   const info=document.createElement("div");
+   const addr=document.createElement("div");addr.className="address";addr.textContent=`${s.n}. ${s.city} – ${s.address}`;info.append(addr);
+   if(s.note){const note=document.createElement("div");note.className="note";note.textContent=s.note;info.append(note)}
+   const link=document.createElement("a");link.className="nav";link.href="https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(`${s.address}, ${s.city}, Česká republika`)+"&travelmode=driving";link.target="_blank";link.rel="noopener";link.textContent="↗ Navigovat v Google Mapách";info.append(link);
+   const arrows=document.createElement("div");arrows.className="arrows";
+   const up=document.createElement("button");up.textContent="▲";up.title="Posunout výš";up.setAttribute("aria-label","Posunout výš");up.onclick=()=>move(s.n,-1);
+   const down=document.createElement("button");down.textContent="▼";down.title="Posunout níž";down.setAttribute("aria-label","Posunout níž");down.onclick=()=>move(s.n,1);
+   arrows.append(up,down);row.append(checks,info,arrows);card.append(row);
+  });list.append(card);
+ });
+}
+function move(n,dir){
+ const i=stops.findIndex(s=>s.n===n);if(i<0)return;
+ let j=i+dir;while(j>=0&&j<stops.length&&stops[j].city!==stops[i].city)j+=dir;
+ if(j>=0&&j<stops.length&&stops[j].city===stops[i].city){
+  // Přenes stav fajfky podle konkrétní zastávky, ne podle jejího čísla.
+  const checkedStops=new Set(stops.filter(s=>checked.has(s.n)));
+  const todayStops=new Set(stops.filter(s=>today.has(s.n)));
+  [stops[i],stops[j]]=[stops[j],stops[i]];
+  sortAndRenumber();
+  checked=new Set(stops.filter(s=>checkedStops.has(s)).map(s=>s.n));
+  today=new Set(stops.filter(s=>todayStops.has(s)).map(s=>s.n));
+  save();render();
+ }
+}
+citySelect.onchange=render;
+document.getElementById("onlyToday").onchange=render;
+document.getElementById("add").onclick=openImporter;
+document.getElementById("reset").onclick=()=>{if(confirm("Opravdu vynulovat všechny odjeté zastávky?")){checked.clear();save();render()}};
+document.getElementById("resetToday").onclick=()=>{if(confirm("Opravdu vynulovat všechny fajfky dnešní trasy?")){today.clear();save();render()}};
+document.getElementById("copy").onclick=async()=>{const text=stops.filter(s=>citySelect.value==="Všechna města"||s.city===citySelect.value).map(s=>`${checked.has(s.n)?"[x]":"[ ]"} ${s.n}. ${s.city} – ${s.address}${s.note?" – "+s.note:""}`).join("\n");try{await navigator.clipboard.writeText(text);alert("Seznam zkopírován.")}catch(e){prompt("Zkopíruj seznam:",text)}};
+render();
+</script>
+<script>
+
+// Importér adresy z fotografie, galerie nebo QR kódu
+const importPanel=document.getElementById("importPanel");
+const importStatus=document.getElementById("importStatus");
+const recognizedAddresses=document.getElementById("recognizedAddresses");
+const cameraImage=document.getElementById("cameraImage");
+const galleryImage=document.getElementById("galleryImage");
+let qrScanner=null;
+function setImportStatus(t){importStatus.textContent=t}
+function openImporter(){importPanel.classList.add("open");importPanel.scrollIntoView({behavior:"smooth",block:"start"});}
+document.getElementById("add").addEventListener("click",openImporter);
+document.getElementById("takePhoto").onclick=()=>cameraImage.click();
+document.getElementById("choosePhoto").onclick=()=>galleryImage.click();
+document.getElementById("closeImporter").onclick=async()=>{importPanel.classList.remove("open");await stopQrScanner();};
+cameraImage.onchange=()=>{if(cameraImage.files&&cameraImage.files[0])readImageText(cameraImage.files[0]);cameraImage.value=""};
+galleryImage.onchange=()=>{if(galleryImage.files&&galleryImage.files[0])readImageText(galleryImage.files[0]);galleryImage.value=""};
+function loadExternalScript(src){return new Promise((resolve,reject)=>{const s=document.createElement("script");s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error("Nepodařilo se načíst knihovnu"));document.head.appendChild(s);});}
+async function readImageText(file){
+ setImportStatus("Rozpoznávám text z obrázku… vyžaduje internet.");
+ try{
+  if(!window.Tesseract) await loadExternalScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js");
+  const result=await Tesseract.recognize(file,"ces+eng",{logger:m=>{if(m.status==="recognizing text")setImportStatus("Rozpoznávám text… "+Math.round((m.progress||0)*100)+" %")}});
+  recognizedAddresses.value=(result.data.text||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean).join("\n");
+  setImportStatus("Hotovo. Zkontroluj rozpoznané adresy a potom je přidej.");
+ }catch(e){setImportStatus("Fotku se nepodařilo přečíst. Zkontroluj internet nebo adresy zadej ručně.");}
+}
+document.getElementById("scanQr").onclick=async()=>{
+ const reader=document.getElementById("qr-reader");reader.hidden=false;
+ setImportStatus("Spouštím fotoaparát pro QR kód. Povol přístup ke kameře.");
+ try{
+  if(!window.Html5Qrcode) await loadExternalScript("https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js");
+  if(!qrScanner)qrScanner=new Html5Qrcode("qr-reader");
+  const cams=await Html5Qrcode.getCameras();if(!cams.length)throw Error("Kamera není dostupná");
+  const cam=cams.find(c=>/back|rear|environment|zadní/i.test(c.label))||cams[cams.length-1];
+  await qrScanner.start(cam.id,{fps:10,qrbox:{width:230,height:230}},async(txt)=>{
+   recognizedAddresses.value+=(recognizedAddresses.value.trim()?"\n":"")+txt.trim();
+   setImportStatus("QR kód načten. Zkontroluj obsah a přidej ho do rozvozu.");
+   await stopQrScanner();
+  },()=>{});
+ }catch(e){setImportStatus("QR skener se nepodařilo spustit. Zkus znovu v Safari a povol kameru.");}
+};
+async function stopQrScanner(){const reader=document.getElementById("qr-reader");if(qrScanner){try{if(qrScanner.isScanning)await qrScanner.stop()}catch(e){}try{await qrScanner.clear()}catch(e){}qrScanner=null;}reader.hidden=true;reader.innerHTML="";}
+document.getElementById("saveRecognized").onclick=()=>{
+ const lines=recognizedAddresses.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ if(!lines.length){setImportStatus("Nejdřív načti nebo napiš adresu.");return;}
+ const knownCities=[...new Set([...initial.map(s=>s.city),...stops.map(s=>s.city)])].sort((a,b)=>b.length-a.length);
+ const parsed=[];
+ for(let line of lines){
+  line=line.replace(/^\d+[\.\):\-]\s*/,"");
+  let note="";if(line.includes("|")){let a=line.split("|");line=a.shift().trim();note=a.join("|").trim();}
+  let city="",address="";
+  const sep=line.match(/^(.+?)\s+[–—]\s+(.+)$/);
+  const comma=line.match(/^(.+?),\s*(.+)$/);
+  if(sep){city=sep[1].trim();address=sep[2].trim();}
+  else if(comma){city=comma[1].trim();address=comma[2].trim();}
+  else {const found=knownCities.find(c=>line.toLocaleLowerCase("cs").startsWith(c.toLocaleLowerCase("cs")+" "));if(found){city=found;address=line.slice(found.length).trim();}else{setImportStatus("U řádku „"+line+"“ doplň město: použij Město – ulice a číslo.");return;}}
+  if(city&&address)parsed.push({city,address,note});
+ }
+ let added=0;
+ for(const s of parsed){
+  if(stops.some(x=>x.city.toLocaleLowerCase("cs")===s.city.toLocaleLowerCase("cs")&&x.address.toLocaleLowerCase("cs")===s.address.toLocaleLowerCase("cs")))continue;
+  stops.push({...s,n:stops.length+1});added++;
+ }
+ if(!added){setImportStatus("Tyto adresy už v seznamu jsou.");return;}
+ sortAndRenumber();save();
+ for(const s of stops){if(![...citySelect.options].some(o=>o.value===s.city)){const opt=document.createElement("option");opt.value=s.city;opt.textContent=s.city;citySelect.append(opt);}}
+ citySelect.value="Všechna města";render();recognizedAddresses.value="";
+ setImportStatus("Přidáno adres: "+added+".");
+};
+
+</script>
+<script>
+(()=>{
+
+const days=[['2026-10-26','Pondělí'],['2026-10-27','Úterý'],['2026-10-28','Středa'],['2026-10-29','Čtvrtek'],['2026-10-30','Pátek'],['2026-10-31','Sobota'],['2026-11-01','Neděle']];
+const keys=['karelco','lpg','karels','polstare'];
+const initial={};
+let data={};const storageKey='trasa64_svozy_2026-10-26_11-01';
+function load(){try{const saved=localStorage.getItem(storageKey);data=saved?JSON.parse(saved):JSON.parse(JSON.stringify(initial));}catch(e){data=JSON.parse(JSON.stringify(initial));}}
+function fmtDate(iso){let [y,m,d]=iso.split('-');return `${Number(d)}. ${Number(m)}. ${y}`;}
+const rateKey='trasa64_price_per_package';
+let pricePerPackage=2;
+try { const storedRate=localStorage.getItem(rateKey); if(storedRate!==null && storedRate!=='') pricePerPackage=Math.max(0,Number(storedRate)||0); } catch(e) {}
+const rateInput=document.getElementById('svozPricePerPackage');
+rateInput.value=String(pricePerPackage);
+function build(){const tbody=document.getElementById('svozRows');tbody.innerHTML='';days.forEach(([date,day])=>{const row=data[date]||{};const tr=document.createElement('tr');if(day==='Neděle')tr.className='sunday';let cells=`<td class="date">${fmtDate(date)}<br><span style="font-weight:400;font-size:12px">${day}${day==='Neděle'?' · svoz':''}</span></td>`;
+keys.forEach(k=>{const val=day==='Neděle'?'':(row[k]??'');cells+=`<td>${day==='Neděle'?'—':`<input type="number" min="0" step="1" inputmode="numeric" aria-label="${day} ${k}" data-date="${date}" data-key="${k}" value="${val}">`}</td>`});
+cells+=`<td class="total" id="daytotal-${date}">0</td>`;
+cells+=`<td class="money" id="packagemoney-${date}">0 Kč</td>`;
+cells+=`<td class="money">${day==='Neděle'?`<label><input type="number" min="0" step="0.01" inputmode="decimal" aria-label="Nedělní svoz v korunách" data-date="${date}" data-key="money" value="${row.money??''}" style="width:90px"> Kč</label>`:'—'}</td>`;
+tr.innerHTML=cells;tbody.appendChild(tr);});
+ document.querySelectorAll('input[data-date]').forEach(inp=>inp.addEventListener('input',()=>{const d=inp.dataset.date,k=inp.dataset.key;data[d]=data[d]||{};data[d][k]=inp.value===''?'':Math.max(0,Number(inp.value));calculate();}));
+ calculate();
+}
+function calculate(){
+ let week=0, packageMoney=0, transportMoney=0;
+ days.forEach(([date,day])=>{
+   let total=0;
+   if(day!=='Neděle'){
+     keys.forEach(k=>{total+=Number((data[date]||{})[k]||0);});
+     week+=total;
+   } else {
+     transportMoney=Number((data[date]||{}).money||0);
+   }
+   const dayPackageMoney=day==='Neděle'?0:total*pricePerPackage;
+   packageMoney+=dayPackageMoney;
+   document.getElementById('daytotal-'+date).textContent=day==='Neděle'?'—':total;
+   document.getElementById('packagemoney-'+date).textContent=day==='Neděle'?'—':dayPackageMoney.toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2})+' Kč';
+ });
+ const fmt=n=>n.toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2})+' Kč';
+ document.getElementById('svozWeekTotal').textContent=week;
+ document.getElementById('svozSummaryPackages').textContent=week;
+ document.getElementById('svozPackageMoneyTotal').textContent=fmt(packageMoney);
+ document.getElementById('svozSummaryPackageMoney').textContent=fmt(packageMoney);
+ document.getElementById('svozMoneyTotal').textContent=fmt(transportMoney);
+ document.getElementById('svozSummaryMoney').textContent=fmt(transportMoney);
+ document.getElementById('svozGrandTotal').textContent=fmt(packageMoney+transportMoney);
+}
+rateInput.addEventListener('input',()=>{
+ pricePerPackage=Math.max(0,Number(rateInput.value)||0);
+ try{localStorage.setItem(rateKey,String(pricePerPackage));}catch(e){}
+ calculate();
+});
+document.getElementById('svozSave').addEventListener('click',()=>{try{localStorage.setItem(storageKey,JSON.stringify(data));localStorage.setItem(rateKey,String(pricePerPackage));document.getElementById('svozStatus').textContent='Uloženo v tomto zařízení včetně ceny za balík.';}catch(e){document.getElementById('svozStatus').textContent='Uložení není dostupné. Použij export nebo si stránku otevři v běžném prohlížeči.';}});
+document.getElementById('svozPrint').addEventListener('click',()=>window.print());
+document.getElementById('svozReset').addEventListener('click',()=>{if(confirm('Opravdu vymazat všechny zadané počty a vrátit původní záznamy?')){data=JSON.parse(JSON.stringify(initial));build();try{localStorage.setItem(storageKey,JSON.stringify(data));}catch(e){}document.getElementById('svozStatus').textContent='Původní záznamy obnoveny.';}});
+load();build();
+
+})();
+</script>
+
+<script>
+/* Záloha všech dat aplikace uložených v tomto prohlížeči. */
+(()=>{
+ const exportBtn=document.getElementById('exportBackup');
+ const importBtn=document.getElementById('importBackupButton');
+ const fileInput=document.getElementById('importBackupFile');
+ const status=document.getElementById('backupStatus');
+ if(!exportBtn||!importBtn||!fileInput)return;
+ exportBtn.addEventListener('click',()=>{
+  try{
+   const values={};
+   for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);values[k]=localStorage.getItem(k);}
+   const payload={app:'Rozvoz a svozy',version:1,createdAt:new Date().toISOString(),localStorage:values};
+   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+   const url=URL.createObjectURL(blob);const a=document.createElement('a');
+   a.href=url;a.download='zaloha-rozvoz-'+new Date().toISOString().slice(0,10)+'.json';
+   document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+   status.textContent='Záloha stažena. Ulož si soubor bezpečně.';
+  }catch(e){status.textContent='Zálohu se nepodařilo vytvořit.';}
+ });
+ importBtn.addEventListener('click',()=>fileInput.click());
+ fileInput.addEventListener('change',async()=>{
+  const f=fileInput.files&&fileInput.files[0];if(!f)return;
+  try{
+   const obj=JSON.parse(await f.text());
+   if(!obj||!obj.localStorage||typeof obj.localStorage!=='object')throw new Error('bad backup');
+   if(!confirm('Obnovení nahradí data aplikace v tomto zařízení daty ze zálohy. Pokračovat?'))return;
+   localStorage.clear();
+   Object.entries(obj.localStorage).forEach(([k,v])=>{if(typeof v==='string')localStorage.setItem(k,v);});
+   status.textContent='Záloha obnovena. Obnovuji aplikaci…';location.reload();
+  }catch(e){status.textContent='Soubor zálohy není platný nebo jej nelze přečíst.';}
+  finally{fileInput.value='';}
+ });
+})();
+if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
+ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
